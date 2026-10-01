@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>PG APPAREL QR Scanner</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#111;color:#fff;font-family:Arial,sans-serif}.wrap{max-width:520px;margin:auto;min-height:100vh;padding:16px}.top{font-size:24px;font-weight:900;padding:10px 0 16px}.hint{color:#bbb;margin-bottom:14px}.box{background:#1e1e1e;border-radius:18px;padding:12px}.status{padding:12px;text-align:center;font-weight:700}.back{display:block;text-decoration:none;text-align:center;background:#fff;color:#111;padding:15px;border-radius:12px;font-weight:800;margin-top:14px}.error{color:#ff8d8d;text-align:center}.qrbox{width:100%;overflow:hidden;border-radius:14px}</style></head>
+<body><div class="wrap"><div class="top">PG APPAREL — QR SCANNER</div><div class="hint">Allow camera access. Point the camera at the entire PG APPAREL QR code.</div><div class="box"><div id="reader" class="qrbox"></div><div id="status" class="status">Starting camera…</div></div><a id="back" class="back" href="#">BACK</a></div>
+<script>
+const params=new URLSearchParams(location.search);const returnUrl=params.get('return')||'';const statusEl=document.getElementById('status');document.getElementById('back').href=returnUrl||'#';
+let done=false;
+function clean(v){const s=String(v||'').toUpperCase();const m=s.match(/PG-A-\d{5}/);return m?m[0]:''}
+function success(decodedText){if(done)return;const id=clean(decodedText);if(!id){statusEl.innerHTML='<span class="error">QR found, but it is not a PG-A-##### product QR.</span>';return;}done=true;statusEl.textContent='QR detected: '+id+' — opening product…';if(!returnUrl){statusEl.textContent='QR detected: '+id;return;}const sep=returnUrl.includes('?')?'&':'?';location.href=returnUrl+sep+'scan='+encodeURIComponent(id)}
+function fail(){statusEl.textContent='Scanning… keep the QR inside the frame.'}
+const scanner=new Html5Qrcode('reader');
+Html5Qrcode.getCameras().then(cams=>{if(!cams||!cams.length)throw new Error('No camera found');const cam=cams.find(c=>/back|rear|environment/i.test(c.label))||cams[cams.length-1];return scanner.start(cam.id,{fps:12,qrbox:{width:260,height:260},aspectRatio:1.0},success,fail)}).then(()=>{statusEl.textContent='Camera ready — point at the QR code.'}).catch(e=>{statusEl.innerHTML='<span class="error">Camera could not start: '+String(e.message||e)+'</span><br><small>Camera permission must be allowed and this page must be opened over HTTPS.</small>'});
+</script></body></html>
