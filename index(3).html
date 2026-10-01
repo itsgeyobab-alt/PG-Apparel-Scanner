@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>PG APPAREL QR Scanner</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;background:#000;color:#fff;font-family:Arial,sans-serif;overflow:hidden}
+#app{position:fixed;inset:0;background:#000;display:flex;flex-direction:column}
+header{padding:calc(14px + env(safe-area-inset-top)) 16px 14px;background:#111;text-align:center;font-weight:900;font-size:22px;z-index:3}
+#cameraWrap{position:relative;flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#000}
+video{width:100%;height:100%;object-fit:cover}
+#shade{position:absolute;inset:0;pointer-events:none}
+#frame{position:absolute;width:min(78vw,420px);height:min(78vw,420px);border:3px solid #fff;border-radius:20px;box-shadow:0 0 0 9999px rgba(0,0,0,.35)}
+.corner{position:absolute;width:34px;height:34px;border-color:#00ff88;border-style:solid}
+.c1{left:-3px;top:-3px;border-width:6px 0 0 6px;border-radius:16px 0 0 0}
+.c2{right:-3px;top:-3px;border-width:6px 6px 0 0;border-radius:0 16px 0 0}
+.c3{left:-3px;bottom:-3px;border-width:0 0 6px 6px;border-radius:0 0 0 16px}
+.c4{right:-3px;bottom:-3px;border-width:0 6px 6px 0;border-radius:0 0 16px 0}
+#status{position:absolute;left:16px;right:16px;bottom:20px;background:rgba(0,0,0,.75);border-radius:14px;padding:13px;text-align:center;font-size:16px;z-index:3}
+#start{position:absolute;z-index:5;left:20px;right:20px;top:50%;transform:translateY(-50%);padding:18px;border:0;border-radius:16px;background:#fff;color:#111;font-size:20px;font-weight:900}
+#start.hidden{display:none}
+#canvas{display:none}
+</style>
+</head>
+<body>
+<div id="app">
+<header>PG APPAREL — QR SCANNER</header>
+<div id="cameraWrap">
+<video id="video" playsinline autoplay muted></video>
+<div id="shade"></div>
+<div id="frame">
+  <i class="corner c1"></i><i class="corner c2"></i><i class="corner c3"></i><i class="corner c4"></i>
+</div>
+<button id="start">📷 START CAMERA</button>
+<div id="status">Tap START CAMERA and allow camera access.</div>
+<canvas id="canvas"></canvas>
+</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script>
+const video=document.getElementById('video');
+const canvas=document.getElementById('canvas');
+const ctx=canvas.getContext('2d',{willReadFrequently:true});
+const startBtn=document.getElementById('start');
+const statusEl=document.getElementById('status');
+const params=new URLSearchParams(location.search);
+const returnUrl=params.get('return')||'';
+let stream=null, scanning=false, done=false, detector=null;
+
+function status(t){statusEl.textContent=t}
+
+function validId(text){
+  const m=String(text||'').toUpperCase().match(/PG-A-\d{5}/);
+  return m?m[0]:'';
+}
+
+function goBack(id){
+  if(done)return;
+  done=true;
+  scanning=false;
+  if(stream) stream.getTracks().forEach(t=>t.stop());
+  const target=validId(id);
+  if(!target){done=false;status('QR found, but it is not a PG APPAREL product QR.');return;}
+  if(!returnUrl){
+    status('Scanned '+target+'. No return page was supplied.');
+    return;
+  }
+  status('Found '+target+' — returning…');
+  const u=new URL(returnUrl,location.href);
+  u.searchParams.set('scan',target);
+  location.href=u.toString();
+}
+
+async function startCamera(){
+  if(scanning)return;
+  try{
+    startBtn.classList.add('hidden');
+    status('Requesting camera access…');
+    stream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},
+      audio:false
+    });
+    video.srcObject=stream;
+    await video.play();
+    scanning=true;
+    status('Point the camera at the PG APPAREL QR code.');
+    if('BarcodeDetector' in window){
+      try{
+        const formats=await BarcodeDetector.getSupportedFormats();
+        if(formats.includes('qr_code')) detector=new BarcodeDetector({formats:['qr_code']});
+      }catch(e){detector=null}
+    }
+    requestAnimationFrame(scanLoop);
+  }catch(e){
+    startBtn.classList.remove('hidden');
+    status('Camera could not start. Please allow Camera access for this site, then tap START CAMERA again.');
+  }
+}
+
+async function scanLoop(){
+  if(!scanning||done)return;
+  if(video.readyState>=2 && video.videoWidth>0){
+    if(detector){
+      try{
+        const codes=await detector.detect(video);
+        for(const c of codes){
+          const id=validId(c.rawValue);
+          if(id){goBack(id);return;}
+        }
+      }catch(e){}
+    }
+    try{
+      const max=1000;
+      const scale=Math.min(1,max/video.videoWidth);
+      canvas.width=Math.round(video.videoWidth*scale);
+      canvas.height=Math.round(video.videoHeight*scale);
+      ctx.drawImage(video,0,0,canvas.width,canvas.height);
+      const img=ctx.getImageData(0,0,canvas.width,canvas.height);
+      const qr=window.jsQR(img.data,img.width,img.height,{inversionAttempts:'attemptBoth'});
+      if(qr){
+        const id=validId(qr.data);
+        if(id){goBack(id);return;}
+      }
+    }catch(e){}
+  }
+  requestAnimationFrame(scanLoop);
+}
+
+startBtn.addEventListener('click',startCamera);
+</script>
+</body>
+</html>
