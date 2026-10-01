@@ -68,7 +68,19 @@ function goBack(id){
     status('Scanned '+target+'. No return page was supplied.');
     return;
   }
-  status('Found '+target+' — returning…');
+  status('Found '+target+' — sending to PG APPAREL…');
+  // If this scanner was opened by the Staff/Admin dashboard, send the
+  // scanned ID back to that already-open dashboard. This keeps the login
+  // session alive and avoids reloading the Apps Script page.
+  try{
+    if(window.opener && !window.opener.closed){
+      window.opener.postMessage({type:'PG_APPAREL_SCAN',productId:target}, '*');
+      setTimeout(function(){ try{window.close();}catch(e){} }, 250);
+      return;
+    }
+  }catch(e){}
+
+  // Fallback when the scanner was opened directly rather than by the dashboard.
   const u=new URL(returnUrl,location.href);
   u.searchParams.set('scan',target);
   location.href=u.toString();
